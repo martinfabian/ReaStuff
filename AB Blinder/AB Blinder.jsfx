@@ -1,0 +1,215 @@
+desc: MF/AB Blinder
+author: M Fabian
+screenshot: https://forum.cockos.com/showthread.php?t=287126
+about: 
+	# MF/AB Blinder
+	JSFX for A/B blind testing on your own
+/* Reaper JSFX to do blind A/B testing. When playing, 
+ * the plugin randomly selects channel A or B, and the
+ * task is to click the A or B button according to your 
+ * guess. When playing is stopped, the plugin summarizes 
+ * how well you did. 50% is what random clicking would do.
+**/ 
+options:no_meter
+
+slider1:0<0,9,1{1+2,3+4,5+6,7+8,9+10,11+12,13+14,15+16,17+18,19+20}>Channel A
+slider2:1<0,9,1{1+2,3+4,5+6,7+8,9+10,11+12,13+14,15+16,17+18,19+20}>Channel B
+
+slider4:4<1,10,1>Interval (s)
+
+in_pin:input 1
+in_pin:input 2
+in_pin:input 3
+in_pin:input 4
+in_pin:input 5
+in_pin:input 6
+in_pin:input 7
+in_pin:input 8
+in_pin:input 9
+in_pin:input 10
+in_pin:input 11
+in_pin:input 12
+in_pin:input 13
+in_pin:input 14
+in_pin:input 15
+in_pin:input 16
+in_pin:input 17
+in_pin:input 18
+in_pin:input 19
+in_pin:input 20
+out_pin:output L
+out_pin:output R
+
+@init
+ext_noinit = 1.0;
+currChan = 0;
+chanA = 0;
+chanB = 1;
+currState = 0;
+MAXCHAN = 10;
+STOPPED = 0;
+PLAYING = 1;
+numGuess = 0; // counts the guesses
+numCorrect = 0; // counts correct guesses
+clickRegged = 0; // to allow only single click in interval
+
+function initButton(xx, yy, ww, hh, txtt)
+instance(button_x, button_y, button_w, button_h, button_txt)
+(
+  button_x = xx;
+  button_y = yy;
+  button_w = ww;
+  button_h = hh;
+  button_txt = txtt;
+);
+function clickedButton()
+global(currChan, numGuess, numCorrect, clickRegged)
+instance(button_x, button_y, button_w, button_h, button_txt)
+local(currGuess)
+(
+	!clickRegged ?
+	(
+	  numGuess += 1;
+	  currGuess = (str_getchar(button_txt, 0) - 'A');
+	  currGuess & 1 == currChan & 1 ? numCorrect += 1;
+	  clickRegged = 1;
+	);
+);
+function drawRect()
+instance(button_x, button_y, button_w, button_h)
+(
+  gfx_x = button_x;
+  gfx_y = button_y;
+  gfx_lineto(gfx_x + button_w, gfx_y, 0.6);
+  gfx_lineto(gfx_x, gfx_y + button_h, 0.6);
+  gfx_lineto(gfx_x - button_w, gfx_y, 0.6);
+  gfx_lineto(gfx_x, gfx_y - button_h, 0.6);
+);
+function drawButton()
+instance(button_x, button_y, button_w, button_h, button_txt, mouse_dn, mouse_up)
+local(txt_w, txt_h, mc)
+(
+  gfx_set(1, 1, 0, 0.6);
+  this.drawRect();
+  gfx_setfont(1, "Arial", 26);
+  gfx_measurestr(button_txt, txt_w, txt_h);
+  gfx_x = button_x;
+  gfx_y = button_y;
+  gfx_drawstr(button_txt, 5, button_x + button_w, button_y + button_h);
+  
+  (button_x <= mouse_x) && (mouse_x <= button_x + button_w) && 
+  (button_y <= mouse_y) && (mouse_y <= button_y + button_h) ?
+  (
+    mc = mouse_cap & 1;
+    !mc && !mouse_dn ?
+    (
+      mouse_up = 1;
+      gfx_setfont(2, "Arial", 28, "b"); gfx_a = 1;
+      gfx_x = button_x; gfx_y = button_y;
+      gfx_drawstr(button_txt, 5, button_x + button_w, button_y + button_h);
+    );
+    mc && mouse_up ?
+    (
+      mouse_dn = 1;
+      mouse_up = 0;
+    );
+    !mc && mouse_dn ?
+    (
+      mouse_dn = 0;
+      this.clickedButton();
+    );
+  ):(
+    mouse_up = mouse_dn = 0;
+  );
+);
+
+buttonA.initButton(60, 60, 120, 40, "A");
+buttonB.initButton(200, 60, 120, 40, "B");
+
+function effect_sliderchange()
+(
+  chanA = slider1;
+  chanB = slider2;
+  interval = slider4;
+);
+function changeChannel()
+global(currChan, chanA, chanB)
+(
+  currChan = rand(2.0) < 1.0 ? chanA : chanB;
+);
+function displayResult()
+local(str, str_w, str_h, percentage)
+(
+  gfx_set(1, 1, 1, 0.7);
+  gfx_setfont(3, "Arial", 24);
+  numGuess < 1 ?
+  (
+    str = "No guesses";
+    gfx_measurestr(str, str_w, str_h);
+    gfx_x = 190 - str_w/2;
+    gfx_y = 110;
+    gfx_drawstr(str);
+  ):(
+    percentage = (100*numCorrect/numGuess)|0;
+    str = sprintf(#, "Guesses: %d, Correct: %d (%d %%)", numGuess, numCorrect, percentage);
+    gfx_measurestr(str, str_w, str_h);
+    gfx_x = 190 - str_w/2;
+    gfx_y = 110;
+    gfx_drawstr(str);    
+  );
+);
+////////////////////////////////////////////////////////////////////////////////
+@slider
+effect_sliderchange();
+changeChannel();
+////////////////////////////////////////////////////////////////////////////////
+@sample
+spl0 = spl(2*currChan);
+spl1 = spl(2*currChan+1);
+////////////////////////////////////////////////////////////////////////////////      
+@gfx 200 400
+
+  play_state == PLAYING && currState == STOPPED ?
+  (
+    currState = PLAYING;
+    startTime = play_position;
+    numGuess = numCorrect = 0;
+    doDisplay = 0;
+    clickRegged = 0;
+  ):(
+    play_state == STOPPED && currState == PLAYING ?
+    (
+      changeChannel();
+      currState = STOPPED;
+      clickRegged = 1; // Do not register clicks until start
+      doDisplay = 1;
+    );
+  );
+  gfx_setfont(0);
+  gfx_set(1, 1, 1, 0.5);
+  gfx_line(0, 20, gfx_w, 20);
+
+  currState == PLAYING ?
+  (
+    timeDiff = play_position - startTime;
+
+    width = gfx_w * (timeDiff / interval);
+    gfx_rect(0, 0, width, 20);
+ 
+    timeDiff > interval ?
+    (
+      changeChannel();
+      startTime = play_position;
+      clickRegged = 0;
+    );
+  );
+
+gfx_setfont(4, "Arial", 18, 'b');
+gfx_set(1, 1, 1, 0.2);
+gfx_x = 146; gfx_y = 2;
+gfx_drawstr("MF/AB Blinder");
+
+buttonA.drawButton();
+buttonB.drawButton();
+
+doDisplay ? ( displayResult(); );
